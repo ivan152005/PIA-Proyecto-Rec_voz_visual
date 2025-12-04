@@ -2,67 +2,102 @@ from pathlib import Path
 import cv2
 import face_recognition as fr
 
+IMAGES_DIR = Path("imagenes")
 
-# Cargar imagenes
-def cargar_imagenes(path_list):
-    # La primera será una foto de control, el resto de pruebas
-    fotos = []
-    for path in path_list:
-        fotos.append(fr.load_image_file(path))
-    return fotos
+# Captura una foto desde la cámara
+def capturar_foto():
+    cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
 
+    if not cam.isOpened():
+        print("No se pudo acceder a la cámara.")
+        return None
 
-def asignar_perfil_color(fotos_list):
-    for i in range(len(fotos_list)):
-        fotos_list[i] = cv2.cvtColor(fotos_list[i], cv2.COLOR_BGR2RGB)
-    return fotos_list
+    print("Cámara abierta. Pulsa ENTER para capturar o ESC para cancelar.")
 
+    while True:
+        ret, frame = cam.read()
+        frame = cv2.flip(frame, 1)
 
-# top, right, botton, left
-def localizar_cara(fotos_list):
-    locations = []
-    for i in fotos_list:
-        locations.append(fr.face_locations(i)[0]) #puede detectar más caras... nos quedamos con la primera
-    return locations
+        if not ret:
+            continue
 
+        cv2.imshow("Captura de rostro", frame)
+        key = cv2.waitKey(1)
 
-def get_cod_faces(fotos_list):
-    cod_faces = []
-    for i in fotos_list:
-        cod_faces.append(fr.face_encodings(i)[0])
-    return cod_faces
+        if key == 13:  # ENTER
+            break
+        elif key == 27:  # ESC
+            frame = None
+            break
 
-# (left, top), (right, bottom)
-def draw_rectangles(fotos_list, locations):
-    for (f, l) in zip(fotos_list, locations):
-        cv2.rectangle(f,
-                      (l[3], l[0]),
-                      (l[1], l[2]),
-                      (0, 255, 0), 2)
+    cam.release()
+    cv2.destroyAllWindows()
+    return frame
 
 
-def show_imgs(fotos_list):
-    for index, f in enumerate(fotos_list):
-        cv2.imshow(f'Foto {index}', f)
+# Obtiene la codificación de una imagen
+def codificar_rostro(imagen):
+    rgb = cv2.cvtColor(imagen, cv2.COLOR_BGR2RGB)
+    caras = fr.face_locations(rgb)
 
-# Por defecto, el valor de la distancia para determinar si es true o false es 0.6
-def compare_all_with_control(cara_cod_list):
-    results = []
-    for i,fc in enumerate(cara_cod_list):
-        if i > 0:
-            # Con fr.compare_faces([control_cod], cara_cod_comparar, 0.3) podemos modificar el límite por el que determinaría si es true
-            diferencias = {'misma_cara': fr.compare_faces([cara_cod_list[0]], fc),
-                           'distancia': fr.face_distance([cara_cod_list[0]], fc)}
-        elif i == 0:
-            diferencias = { 'misma_cara': 'control',
-                            'distancia': '0'}
-        results.append(diferencias)
+    if len(caras) == 0:
+        return None
 
-    return results
+    return fr.face_encodings(rgb, caras)[0]
 
-def show_results(fotos_list, results):
-    for d,f in zip(results, fotos_list):
-        resultado = d['misma_cara']
-        distancia = d['distancia'][0]
-        cv2.putText(f, f'{resultado} :::: {distancia}',
-                    (50, 50), cv2.FONT_HERSHEY_COMPLEX, 1, (0,255,0), 2)
+
+# Carga todas las imágenes registradas y sus codificaciones
+def cargar_usuarios_registrados():
+    codificaciones = []
+    nombres = []
+
+    for img_path in IMAGES_DIR.glob("*.jpg"):
+        imagen = fr.load_image_file(img_path)
+        face_locations = fr.face_locations(imagen)
+
+        if len(face_locations) == 0:
+            continue
+
+        encoding = fr.face_encodings(imagen, face_locations)[0]
+
+        nombre = img_path.stem.replace("usuario_", "")
+        codificaciones.append(encoding)
+        nombres.append(nombre)
+
+    return codificaciones, nombres
+
+
+# Compara un rostro capturado con la base de usuarios
+def identificar_usuario(encoding_actual, codificaciones, nombres):
+    if encoding_actual is None:
+        return None
+
+    coincidencias = fr.compare_faces(codificaciones, encoding_actual)
+    distancias = fr.face_distance(codificaciones, encoding_actual)
+
+    if len(distancias) == 0:
+        return None
+
+    mejor_indice = distancias.argmin()
+
+    if coincidencias[mejor_indice]:
+        return nombres[mejor_indice]
+
+    return None
+
+
+# FUNCIÓN PRINCIPAL
+def reconocer_usuario():
+    foto = capturar_foto()
+    if foto is None:
+        return None, None
+
+    encoding_actual = codificar_rostro(foto)
+    if encoding_actual is None:
+        print("No se detectó rostro en la imagen.")
+        return None, foto
+
+    codificaciones, nombres = cargar_usuarios_registrados()
+
+    usuario = identificar_usuario(encoding_actual, codificaciones, nombres)
+    return usuario, foto
