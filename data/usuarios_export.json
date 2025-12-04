@@ -1,6 +1,7 @@
 [
     {
-        "nombre": "ivan",
-        "dni": "05982934J"
+        "nombre": "nacho",
+        "dni": "05982934J",
+        "ruta_imagen": "imagenes\\usuario_nacho.jpg"
     }
 ]

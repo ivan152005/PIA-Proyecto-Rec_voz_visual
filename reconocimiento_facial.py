@@ -90,12 +90,12 @@ def identificar_usuario(encoding_actual, codificaciones, nombres):
 def reconocer_usuario():
     foto = capturar_foto()
     if foto is None:
-        return None
+        return None, None
 
     encoding_actual = codificar_rostro(foto)
     if encoding_actual is None:
         print("No se detectó rostro en la imagen.")
-        return None
+        return None, foto
 
     codificaciones, nombres = cargar_usuarios_registrados()
 

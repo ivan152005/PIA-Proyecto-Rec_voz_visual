@@ -3,10 +3,11 @@ import pyttsx3
 import speech_recognition as sr
 import unicodedata
 from almacenamiento import (
-    guardar_en_csv,
+    guardar_usuario,
     consultar_usuario as buscar_dni,
     exportar_csv_a_json
 )
+from usuario import Usuario
 
 
 # Motor de voz
@@ -119,8 +120,7 @@ def registrar_usuario_por_voz():
             talk("El DNI no es válido. Debe tener 8 números y una letra al final. Inténtalo de nuevo.")
 
     talk(f"He entendido: {nombre}, DNI {dni}.")
-    guardar_en_csv(nombre, dni)
-    talk("Tus datos han sido guardados correctamente.")
+
     return nombre, dni
 
 # Consultar usuario
