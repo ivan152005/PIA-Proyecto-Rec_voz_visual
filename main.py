@@ -1,18 +1,39 @@
-from pathlib import Path
 from reconocimiento_facial import *
+from asistente_voz import *
+from almacenamiento import *
 
-# Press the green button in the gutter to run the script.
+
+def ejecutar_sistema():
+
+    usuario, foto = reconocer_usuario()
+
+    # No se pudo capturar foto o no se detectó rostro
+    if usuario is None:
+        talk("No estás registrado. Vamos a realizar el proceso de registro.")
+        nombre, dni = registrar_usuario_por_voz()
+
+        if not nombre or not dni:
+            talk("No se pudieron registrar tus datos.")
+            return
+
+        guardar_imagen_usuario(nombre, foto)
+
+        talk(f"Registro completado. Bienvenido, {nombre}.")
+        modo_asistente()
+        return
+
+    # Usuario reconocido por su rostro
+    talk(f"Hola {usuario}, he reconocido tu rostro.")
+
+    dni = consultar_usuario(usuario)
+    if dni:
+        talk(f"Tu DNI es {dni}.")
+    else:
+        talk("No encontré tu DNI en la base de datos CSV.")
+
+    talk("¿Necesitas realizar alguna consulta?")
+    modo_asistente()
+
+
 if __name__ == '__main__':
-    paths = []
-    paths.append(Path('fotos', 'foto1.jpg'))
-    paths.append(Path('fotos', 'foto2.jpg'))
-    paths.append(Path('fotos', 'foto3.jpeg'))
-    fotos_list = cargar_imagenes(paths)
-    fotos_list = asignar_perfil_color(fotos_list)
-    locations = localizar_cara(fotos_list)
-    cod_faces = get_cod_faces(fotos_list)
-    draw_rectangles(fotos_list, locations)
-    results = compare_all_with_control(cod_faces)
-    show_results(fotos_list, results)
-    show_imgs(fotos_list)
-    cv2.waitKey(0)
+    ejecutar_sistema()
