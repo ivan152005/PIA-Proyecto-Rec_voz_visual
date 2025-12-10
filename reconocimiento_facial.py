@@ -1,13 +1,13 @@
 from pathlib import Path
 import cv2
 import face_recognition as fr
+from almacenamiento import cargar_usuarios
 
 IMAGES_DIR = Path("imagenes")
 
-# Captura una foto desde la cámara
+
 def capturar_foto():
     cam = cv2.VideoCapture(1, cv2.CAP_DSHOW)
-
     if not cam.isOpened():
         print("No se pudo acceder a la cámara.")
         return None
@@ -17,13 +17,11 @@ def capturar_foto():
     while True:
         ret, frame = cam.read()
         frame = cv2.flip(frame, 1)
-
         if not ret:
             continue
 
         cv2.imshow("Captura de rostro", frame)
         key = cv2.waitKey(1)
-
         if key == 13:  # ENTER
             break
         elif key == 27:  # ESC
@@ -35,69 +33,50 @@ def capturar_foto():
     return frame
 
 
-# Obtiene la codificación de una imagen
 def codificar_rostro(imagen):
     rgb = cv2.cvtColor(imagen, cv2.COLOR_BGR2RGB)
     caras = fr.face_locations(rgb)
-
-    if len(caras) == 0:
+    if not caras:
         return None
-
     return fr.face_encodings(rgb, caras)[0]
 
 
-# Carga todas las imágenes registradas y sus codificaciones
-def cargar_usuarios_registrados():
-    codificaciones = []
-    nombres = []
-
-    for img_path in IMAGES_DIR.glob("*.jpg"):
-        imagen = fr.load_image_file(img_path)
-        face_locations = fr.face_locations(imagen)
-
-        if len(face_locations) == 0:
-            continue
-
-        encoding = fr.face_encodings(imagen, face_locations)[0]
-
-        nombre = img_path.stem.replace("usuario_", "")
-        codificaciones.append(encoding)
-        nombres.append(nombre)
-
-    return codificaciones, nombres
-
-
-# Compara un rostro capturado con la base de usuarios
-def identificar_usuario(encoding_actual, codificaciones, nombres):
+def identificar_usuario(encoding_actual, usuarios):
     if encoding_actual is None:
         return None
 
-    coincidencias = fr.compare_faces(codificaciones, encoding_actual)
-    distancias = fr.face_distance(codificaciones, encoding_actual)
+    encodings_registrados = []
+    nombres_registrados = []
 
-    if len(distancias) == 0:
+    for u in usuarios:
+        if u.encoding is not None:
+            encodings_registrados.append(u.encoding)
+            nombres_registrados.append(u.nombre)
+
+    if not encodings_registrados:
         return None
 
+    coincidencias = fr.compare_faces(encodings_registrados, encoding_actual)
+    distancias = fr.face_distance(encodings_registrados, encoding_actual)
     mejor_indice = distancias.argmin()
 
     if coincidencias[mejor_indice]:
-        return nombres[mejor_indice]
+        return nombres_registrados[mejor_indice]
 
     return None
 
 
-# FUNCIÓN PRINCIPAL
 def reconocer_usuario():
     foto = capturar_foto()
     if foto is None:
-        return None, None
+        return None, None, None
 
     encoding_actual = codificar_rostro(foto)
     if encoding_actual is None:
         print("No se detectó rostro en la imagen.")
-        return None, foto
+        return None, foto, None
 
-    codificaciones, nombres = cargar_usuarios_registrados()
+    usuarios = cargar_usuarios()
+    usuario_identificado = identificar_usuario(encoding_actual, usuarios)
 
-    usuario = identificar_usuario(encoding_actual, codificaciones, nombres)
-    return usuario, foto
+    return usuario_identificado, foto, encoding_actual
