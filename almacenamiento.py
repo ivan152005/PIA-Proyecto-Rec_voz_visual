@@ -3,79 +3,116 @@ import csv
 import json
 import cv2
 from usuario import Usuario
+from datetime import datetime
 
 DATA_DIR = Path("data")
 IMAGES_DIR = Path("imagenes")
 
-CSV_PATH = DATA_DIR / "usuarios.csv"
-JSON_EXPORT_PATH = DATA_DIR / "usuarios_export.json"
+USUARIOS_JSON = DATA_DIR / "usuarios.json"
+ASISTENCIA_JSON = DATA_DIR / "asistencia.json"
+USUARIOS_CSV = DATA_DIR / "usuarios_export.csv"
 
 
 def asegurar_estructura():
     DATA_DIR.mkdir(exist_ok=True)
     IMAGES_DIR.mkdir(exist_ok=True)
 
+    # Crear JSON vacío si no existe
+    if not USUARIOS_JSON.is_file():
+        with open(USUARIOS_JSON, "w", encoding="utf-8") as f:
+            json.dump([], f, indent=4, ensure_ascii=False)
 
-def guardar_imagen_usuario(nombre, foto):
+    if not ASISTENCIA_JSON.is_file():
+        with open(ASISTENCIA_JSON, "w", encoding="utf-8") as f:
+            json.dump([], f, indent=4, ensure_ascii=False)
+
+
+
+def cargar_usuarios():
     asegurar_estructura()
-    ruta = IMAGES_DIR / f"usuario_{nombre.lower()}.jpg"
-    cv2.imwrite(str(ruta), foto)
-    return ruta
+
+    with open(USUARIOS_JSON, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    return [Usuario.from_dict(u) for u in data]
 
 
 def guardar_usuario(usuario: Usuario):
     asegurar_estructura()
-    existe = CSV_PATH.is_file()
 
-    with open(CSV_PATH, "a", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
+    usuarios = cargar_usuarios()
 
-        if not existe:
-            writer.writerow(["nombre", "dni", "ruta_imagen"])
+    # Evitar duplicados por nombre
+    usuarios = [u for u in usuarios if u.nombre != usuario.nombre]
 
-        writer.writerow([usuario.nombre, usuario.dni, usuario.ruta_imagen])
+    usuarios.append(usuario)
+
+    with open(USUARIOS_JSON, "w", encoding="utf-8") as f:
+        json.dump([u.to_dict() for u in usuarios], f, indent=4, ensure_ascii=False)
 
 
+def guardar_imagen_usuario(nombre, foto):
+    asegurar_estructura()
+
+    ruta = IMAGES_DIR / f"usuario_{nombre.lower()}.jpg"
+    cv2.imwrite(str(ruta), foto)
+    return str(ruta)
+
+
+#  CONSULTAR USUARIO POR NOMBRE
 def consultar_usuario(nombre: str):
     nombre = nombre.lower()
-    if not CSV_PATH.is_file():
-        return None
+    usuarios = cargar_usuarios()
 
-    with open(CSV_PATH, "r", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            if row["nombre"].lower() == nombre:
-                return Usuario(
-                    nombre=row["nombre"],
-                    dni=row["dni"],
-                    ruta_imagen=row.get("ruta_imagen")
-                )
+    for u in usuarios:
+        if u.nombre == nombre:
+            return u
+
     return None
 
 
-def cargar_todos_los_usuarios():
-    if not CSV_PATH.is_file():
-        return []
-
-    usuarios = []
-    with open(CSV_PATH, "r", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            usuarios.append(
-                Usuario(
-                    nombre=row["nombre"],
-                    dni=row["dni"],
-                    ruta_imagen=row.get("ruta_imagen")
-                )
-            )
-    return usuarios
-
-
-def exportar_csv_a_json():
+#  REGISTRAR ASISTENCIA
+def registrar_asistencia(nombre: str, dni: str):
+    # Registra un evento de asistencia con fecha y hora
     asegurar_estructura()
-    usuarios = cargar_todos_los_usuarios()
 
-    lista_dicts = [u.to_dict() for u in usuarios]
+    with open(ASISTENCIA_JSON, "r", encoding="utf-8") as f:
+        registros = json.load(f)
 
-    with open(JSON_EXPORT_PATH, "w", encoding="utf-8") as f:
-        json.dump(lista_dicts, f, indent=4, ensure_ascii=False)
+    nuevo = {
+        "nombre": nombre,
+        "dni": dni,
+        "fecha": datetime.now().strftime("%Y-%m-%d"),
+        "hora": datetime.now().strftime("%H:%M:%S")
+    }
 
-    return JSON_EXPORT_PATH
+    registros.append(nuevo)
+
+    with open(ASISTENCIA_JSON, "w", encoding="utf-8") as f:
+        json.dump(registros, f, indent=4, ensure_ascii=False)
+
+
+#  EXPORTACIÓN: JSON a CSV
+def exportar_json_a_csv():
+    asegurar_estructura()
+
+    usuarios = cargar_usuarios()
+
+    with open(USUARIOS_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+
+        # Cabeceras
+        writer.writerow(["nombre", "dni", "ruta_imagen", "encoding"])
+
+        for u in usuarios:
+            # encoding convertido a JSON para que sea legible en CSV
+            encoding_str = json.dumps(u.encoding, ensure_ascii=False)
+
+            writer.writerow([
+                u.nombre,
+                u.dni,
+                u.ruta_imagen,
+                encoding_str
+            ])
+
+    return USUARIOS_CSV
